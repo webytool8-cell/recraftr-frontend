@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>recraftr - The Creative Partner for Writers</title>
+    <meta name="description" content="Unblock your creativity. Recraftr helps writers, authors, and creators instantly repurpose their drafts into newsletters, threads, and social posts.">
+    <meta name="keywords" content="writer tools, content repurposing, creative writing assistant, blog to newsletter, writer's block, content strategy, ai for writers">
+
+    <!-- Transparent Logo -->
+    <link rel="icon" type="image/png" href="https://app.trickle.so/storage/public/images/usr_19c684eaa8000001/6fc98be0-9fda-473d-bd91-3e5892ba2bd4.png">
+
+    <!-- React -->
+    <script src="https://resource.trickle.so/vendor_lib/unpkg/react@18/umd/react.production.min.js"></script>
+    <script src="https://resource.trickle.so/vendor_lib/unpkg/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://resource.trickle.so/vendor_lib/unpkg/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Switched to Plus Jakarta Sans for headings/UI, Inter for body, Lora preserved for content editing -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <link href="https://resource.trickle.so/vendor_lib/unpkg/lucide-static@0.516.0/font/lucide.css" rel="stylesheet">
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+
+    <style type="text/tailwindcss">
+    @layer theme {
+        :root {
+            /* LIGHT MODE DEFAULT */
+            --bg-color: #FFFFFF; 
+            --surface-color: #FFFFFF;
+            
+            --primary-color: #000000; 
+            --primary-hover: #333333;
+            --primary-text: #FFFFFF; 
+            
+            --secondary-color: #F4F4F5; 
+            --secondary-text: #000000;
+            
+            --text-main: #18181B; 
+            --text-muted: #71717A; 
+            --text-subtle: #D4D4D8; 
+            
+            --border-color: #E4E4E7; 
+            --border-hover: #18181B;
+            
+            --error-color: #D93025;
+            
+            --radius-sm: 2px;
+            --radius-md: 4px;
+            --radius-lg: 4px;
+            --radius-full: 9999px;
+            
+            --shadow-sm: none;
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.05);
+            --shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
+            --shadow-creative: 0 4px 20px rgba(0,0,0,0.06);
+        }
+    }
+
+    @layer base {
+        body {
+            @apply bg-[var(--bg-color)] text-[var(--text-main)] font-sans antialiased selection:bg-[var(--primary-color)] selection:text-[var(--primary-text)] transition-colors duration-300;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            @apply tracking-tight text-[var(--text-main)];
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        /* Editorial text style for content */
+        .editorial-text {
+            font-family: 'Lora', serif;
+        }
+    }
+
+    @layer components {
+        .btn {
+            @apply inline-flex items-center justify-center px-6 py-3.5 md:py-3 rounded-[var(--radius-full)] font-bold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-black/10 disabled:opacity-50 disabled:cursor-not-allowed text-[16px] md:text-[15px] tracking-wide;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .btn-primary {
+            @apply bg-[var(--primary-color)] text-[var(--primary-text)] hover:bg-[var(--primary-hover)] border border-transparent hover:-translate-y-0.5 shadow-lg shadow-black/5;
+        }
+        .btn-secondary {
+            @apply bg-white border border-[var(--border-color)] text-[var(--text-main)] hover:border-black shadow-none hover:bg-gray-50;
+        }
+        .btn-ghost {
+            @apply text-[var(--text-muted)] hover:text-black hover:bg-gray-50;
+        }
+        
+        /* Content Blocks - Clean & Minimal */
+        .content-block {
+            @apply bg-[var(--surface-color)] border border-[var(--border-color)] rounded-[var(--radius-md)];
+        }
+        
+        .input-field {
+            @apply w-full rounded-[var(--radius-md)] border border-[var(--border-color)] bg-[var(--surface-color)] px-5 py-4 text-lg text-[var(--text-main)] focus:border-black focus:outline-none placeholder:text-[var(--text-subtle)] transition-all font-serif;
+            font-family: 'Lora', serif;
+        }
+        
+        /* Typography Utility */
+        .text-hero {
+            @apply font-extrabold leading-[1.15] tracking-tight;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+    }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <!-- Utilities -->
+    <script src="utils/themeManager.js"></script>
+    <script type="text/babel" src="utils/security.js"></script>
+    <script type="text/babel" src="utils/dbAdapter.js"></script>
+    <script type="text/babel" src="utils/authService.js"></script>
+    <script type="text/babel" src="utils/aiService.js"></script>
+    
+    <!-- Components -->
+    <script type="text/babel" src="components/HeroAnimation.js"></script>
+    <script type="text/babel" src="components/Header.js"></script>
+    <script type="text/babel" src="components/PlatformBadge.js"></script>
+    <script type="text/babel" src="components/InputPanel.js"></script>
+    <script type="text/babel" src="components/OutputPanel.js"></script>
+    <script type="text/babel" src="components/LandingSections.js"></script>
+    <script type="text/babel" src="components/Footer.js"></script>
+
+    <!-- App -->
+    <script type="text/babel" src="app.js"></script>
+</body>
+</html>
