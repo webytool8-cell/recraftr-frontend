@@ -1,6 +1,9 @@
 // Configuration
 const STRIPE_PK = "pk_live_51SsY1YJND8CIumcoDgm4GlwpRQXpqWpt9ijhsdPOqLyQ24vJO5EkzNKpqoy6nOVlHo2wfuoTYqNuLdVV9HZA4lil00C35usxSi";
-const BACKEND_URL = "https://recraftr.com";
+
+// FIX #1: Correct backend URL - use same domain or absolute URL
+const BACKEND_URL = window.location.origin; // This will use https://www.recraftr.com automatically
+// OR use: const BACKEND_URL = "https://www.recraftr.com";
 
 function PaymentApp() {
     const [user, setUser] = React.useState(null);
@@ -13,6 +16,9 @@ function PaymentApp() {
     const [success, setSuccess] = React.useState(false);
     const [errorMsg, setErrorMsg] = React.useState('');
     const [isConfigError, setIsConfigError] = React.useState(false);
+
+    // FIX #2: Add card element error state
+    const [cardError, setCardError] = React.useState('');
 
     // Initialize User
     React.useEffect(() => {
@@ -32,42 +38,86 @@ function PaymentApp() {
     React.useEffect(() => {
         if (!window.Stripe) {
             console.error("Stripe.js not loaded");
+            setErrorMsg("Payment system failed to load. Please refresh the page.");
             return;
         }
         
-        const stripeInstance = window.Stripe(STRIPE_PK);
-        setStripe(stripeInstance);
-        
-        const elementsInstance = stripeInstance.elements();
-        setElements(elementsInstance);
+        try {
+            const stripeInstance = window.Stripe(STRIPE_PK);
+            setStripe(stripeInstance);
+            
+            const elementsInstance = stripeInstance.elements();
+            setElements(elementsInstance);
 
-        // Create and mount the card element
-        const style = {
-            base: {
-                color: '#18181B',
-                fontFamily: '"Plus Jakarta Sans", sans-serif',
-                fontSmoothing: 'antialiased',
-                fontSize: '16px',
-                '::placeholder': {
-                    color: '#A1A1AA'
+            // Create and mount the card element
+            const style = {
+                base: {
+                    color: '#18181B',
+                    fontFamily: '"Plus Jakarta Sans", sans-serif',
+                    fontSmoothing: 'antialiased',
+                    fontSize: '16px',
+                    '::placeholder': {
+                        color: '#A1A1AA'
+                    },
+                    backgroundColor: 'transparent'
                 },
-                backgroundColor: 'transparent'
-            },
-            invalid: {
-                color: '#D93025',
-                iconColor: '#D93025'
-            }
-        };
+                invalid: {
+                    color: '#D93025',
+                    iconColor: '#D93025'
+                }
+            };
 
-        const card = elementsInstance.create('card', { style: style, hidePostalCode: true });
-        setCardElement(card);
+            const card = elementsInstance.create('card', { 
+                style: style, 
+                hidePostalCode: true 
+            });
+            
+            // FIX #3: Add card element event listeners
+            card.on('change', (event) => {
+                if (event.error) {
+                    setCardError(event.error.message);
+                } else {
+                    setCardError('');
+                }
+            });
+
+            setCardElement(card);
+        } catch (error) {
+            console.error("Stripe initialization error:", error);
+            setErrorMsg("Failed to initialize payment system: " + error.message);
+        }
         
     }, []);
 
-    // Mount Card Element when DOM is ready and stripe is initialized
+    // FIX #4: Improved card mounting with better error handling
     React.useEffect(() => {
-        if (cardElement && !loading && document.getElementById('card-element')) {
-            cardElement.mount('#card-element');
+        if (cardElement && !loading) {
+            // Wait for DOM to be ready
+            const mountCard = () => {
+                const cardContainer = document.getElementById('card-element');
+                if (cardContainer) {
+                    try {
+                        cardElement.mount('#card-element');
+                        console.log("Card element mounted successfully");
+                    } catch (error) {
+                        console.error("Card mount error:", error);
+                        setErrorMsg("Failed to load card input: " + error.message);
+                    }
+                } else {
+                    // Retry if DOM not ready
+                    setTimeout(mountCard, 100);
+                }
+            };
+            mountCard();
+            
+            // Cleanup
+            return () => {
+                try {
+                    cardElement.unmount();
+                } catch (e) {
+                    // Ignore unmount errors
+                }
+            };
         }
     }, [cardElement, loading]);
 
@@ -102,69 +152,122 @@ function PaymentApp() {
 
     const handleSubscribe = async (e) => {
         e.preventDefault();
-        if (!stripe || !elements || !cardElement) return;
+        if (!stripe || !elements || !cardElement) {
+            setErrorMsg("Payment system not ready. Please refresh the page.");
+            return;
+        }
 
+        // FIX #5: Validate card before submission
         setProcessing(true);
         setErrorMsg('');
+        setCardError('');
         setIsConfigError(false);
 
         try {
-            // 1. Create Payment Intent on Backend
-            const response = await fetch(`${BACKEND_URL}/api/create-payment-intent`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ amount: 1500 }) // $15.00
-            });
-
-            if (!response.ok) {
-                let errorDetails = `Backend Error (${response.status})`;
-                try {
-                    const errorJson = await response.json();
-                    if (errorJson.error) {
-                        errorDetails = errorJson.error;
-                        // Check for common config errors
-                        if (errorDetails.includes('provide an API key') || errorDetails.includes('STRIPE_SECRET_KEY')) {
-                            setIsConfigError(true);
-                        }
-                    }
-                } catch (e) {}
-                throw new Error(errorDetails);
-            }
-
-            const { clientSecret } = await response.json();
-
-            // 2. Confirm Card Payment
-            const result = await stripe.confirmCardPayment(clientSecret, {
-                payment_method: {
-                    card: cardElement,
-                    billing_details: {
-                        name: user.name,
-                        email: user.email
-                    }
+            // FIX #6: Create payment method first to validate card
+            const { error: createError, paymentMethod } = await stripe.createPaymentMethod({
+                type: 'card',
+                card: cardElement,
+                billing_details: {
+                    name: user.name,
+                    email: user.email
                 }
             });
 
+            if (createError) {
+                setCardError(createError.message);
+                setProcessing(false);
+                return;
+            }
+
+            console.log("Payment method created:", paymentMethod.id);
+
+            // FIX #7: Better error handling for backend call with detailed logging
+            console.log(`Calling backend: ${BACKEND_URL}/api/create-payment-intent`);
+            
+            const response = await fetch(`${BACKEND_URL}/api/create-payment-intent`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    amount: 1500, // $15.00 in cents
+                    payment_method_id: paymentMethod.id
+                })
+            });
+
+            console.log("Backend response status:", response.status);
+
+            if (!response.ok) {
+                let errorDetails = `Backend Error (${response.status}: ${response.statusText})`;
+                try {
+                    const errorJson = await response.json();
+                    console.error("Backend error details:", errorJson);
+                    if (errorJson.error) {
+                        errorDetails = errorJson.error;
+                        // Check for common config errors
+                        if (errorDetails.includes('provide an API key') || 
+                            errorDetails.includes('STRIPE_SECRET_KEY') ||
+                            errorDetails.includes('No API key provided')) {
+                            setIsConfigError(true);
+                        }
+                    }
+                } catch (parseError) {
+                    console.error("Failed to parse error response:", parseError);
+                    const textError = await response.text();
+                    console.error("Error response text:", textError);
+                }
+                throw new Error(errorDetails);
+            }
+
+            const data = await response.json();
+            console.log("Backend response data:", data);
+            
+            const { clientSecret } = data;
+
+            if (!clientSecret) {
+                throw new Error("No client secret received from backend");
+            }
+
+            // 2. Confirm Card Payment
+            const result = await stripe.confirmCardPayment(clientSecret, {
+                payment_method: paymentMethod.id
+            });
+
             if (result.error) {
-                console.error(result.error.message);
-                setErrorMsg(`Stripe: ${result.error.message}`);
+                console.error("Payment confirmation error:", result.error);
+                setCardError(result.error.message);
                 setProcessing(false);
             } else {
                 if (result.paymentIntent.status === 'succeeded') {
+                    console.log("Payment succeeded:", result.paymentIntent.id);
                     await handleSuccess(result.paymentIntent.id);
+                } else {
+                    console.log("Payment status:", result.paymentIntent.status);
+                    setErrorMsg(`Payment status: ${result.paymentIntent.status}`);
+                    setProcessing(false);
                 }
             }
 
         } catch (err) {
-            console.error(err);
+            console.error("Payment error:", err);
             setErrorMsg(err.message || "Connection error. Please try again.");
-            if (err.message && (err.message.includes('provide an API key') || err.message.includes('API key'))) {
+            if (err.message && (
+                err.message.includes('provide an API key') || 
+                err.message.includes('API key') ||
+                err.message.includes('STRIPE_SECRET_KEY')
+            )) {
                 setIsConfigError(true);
             }
             setProcessing(false);
         }
     };
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center bg-[var(--bg-color)]"><div className="icon-loader animate-spin text-[var(--primary-color)]"></div></div>;
+    if (loading) return (
+        <div className="min-h-screen flex items-center justify-center bg-[var(--bg-color)]">
+            <div className="icon-loader animate-spin text-[var(--primary-color)]"></div>
+        </div>
+    );
 
     if (success) {
         return (
@@ -252,6 +355,13 @@ function PaymentApp() {
                                 >
                                     {/* Stripe Element mounts here */}
                                 </div>
+                                {/* FIX #8: Show card-specific errors */}
+                                {cardError && (
+                                    <p className="text-red-500 text-sm flex items-center gap-2">
+                                        <div className="icon-alert-circle"></div>
+                                        {cardError}
+                                    </p>
+                                )}
                             </div>
 
                             {errorMsg && (
@@ -268,6 +378,7 @@ function PaymentApp() {
                                             <ul className="list-disc ml-4 mt-1 space-y-1">
                                                 <li>Check your Vercel/Hosting Environment Variables.</li>
                                                 <li>Ensure the key starts with <code>sk_test_...</code> or <code>sk_live_...</code>.</li>
+                                                <li>Backend URL being called: <code>{BACKEND_URL}/api/create-payment-intent</code></li>
                                             </ul>
                                         </div>
                                     )}
@@ -277,8 +388,8 @@ function PaymentApp() {
                             <div className="pt-6">
                                 <button 
                                     type="submit" 
-                                    disabled={processing || !stripe}
-                                    className="w-full btn btn-primary py-4 text-lg shadow-lg hover:shadow-black/10 rounded-full"
+                                    disabled={processing || !stripe || !cardElement}
+                                    className="w-full btn btn-primary py-4 text-lg shadow-lg hover:shadow-black/10 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {processing ? (
                                         <div className="flex items-center gap-2">
